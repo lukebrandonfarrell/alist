@@ -11,6 +11,7 @@ import { Todo } from '@/types/todo';
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { useAnimatedRef } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Sortable, { useItemContext } from 'react-native-sortables';
 
@@ -39,6 +40,7 @@ export default function TasksScreen() {
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const [formVisible, setFormVisible] = useState(false);
   const [deleteConfirmTodo, setDeleteConfirmTodo] = useState<Todo | null>(null);
+  const animatedScrollRef = useAnimatedRef<Animated.ScrollView>();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
 
@@ -74,7 +76,7 @@ export default function TasksScreen() {
     await completeTodo(id);
   };
 
-  const handleDragEnd = async ({ fromIndex, toIndex }: { fromIndex: number; toIndex: number; data: Todo[] }) => {
+  const handleDragEnd = async ({ fromIndex, toIndex }: { fromIndex: number; toIndex: number }) => {
     await reorderTodos(fromIndex, toIndex);
   };
 
@@ -110,26 +112,34 @@ export default function TasksScreen() {
             message="Tap the + button to create your first task"
           />
         ) : (
-          <View style={styles.list}>
-            <Sortable.Grid
-              data={activeTodos}
-              columns={1}
-              onDragEnd={handleDragEnd}
-              keyExtractor={(item) => item.id}
-              customHandle={true}
-              renderItem={({ item }) => (
-                <SortableTodoItem
-                  item={item}
-                  onEdit={() => {
-                    setEditingTodo(item);
-                    setFormVisible(true);
-                  }}
-                  onDelete={() => handleDeleteClick(item)}
-                  onToggleComplete={() => handleComplete(item.id)}
-                />
-              )}
-            />
-          </View>
+          <Animated.ScrollView
+            ref={animatedScrollRef}
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={true}
+          >
+            <View style={styles.sortableContainer}>
+              <Sortable.Flex
+                onDragEnd={handleDragEnd}
+                customHandle={true}
+                flexDirection="column"
+                scrollableRef={animatedScrollRef}
+              >
+                {activeTodos.map((item) => (
+                  <SortableTodoItem
+                    key={item.id}
+                    item={item}
+                    onEdit={() => {
+                      setEditingTodo(item);
+                      setFormVisible(true);
+                    }}
+                    onDelete={() => handleDeleteClick(item)}
+                    onToggleComplete={() => handleComplete(item.id)}
+                  />
+                ))}
+              </Sortable.Flex>
+            </View>
+          </Animated.ScrollView>
         )}
 
         <TodoForm
@@ -183,7 +193,13 @@ const styles = StyleSheet.create({
   list: {
     flex: 1,
     width: '100%',
+  },
+  listContent: {
     paddingVertical: 8,
+    paddingBottom: 60,
+  },
+  sortableContainer: {
+    width: '100%',
     paddingHorizontal: 16,
   },
 });
