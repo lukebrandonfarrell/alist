@@ -1,98 +1,189 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { DeleteConfirmModal } from '@/components/todo/delete-confirm-modal';
+import { DragHandle } from '@/components/todo/drag-handle';
+import { EmptyState } from '@/components/todo/empty-state';
+import { TodoForm } from '@/components/todo/todo-form';
+import { TodoItem } from '@/components/todo/todo-item';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Colors } from '@/constants/theme';
+import { useTodos } from '@/contexts/todos-context';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Todo } from '@/types/todo';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Sortable, { useItemContext } from 'react-native-sortables';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+function SortableTodoItem({ item, onEdit, onDelete, onToggleComplete }: {
+  item: Todo;
+  onEdit: () => void;
+  onDelete: () => void;
+  onToggleComplete: () => void;
+}) {
+  const { isActive } = useItemContext();
 
-export default function HomeScreen() {
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <TodoItem
+      todo={item}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      onToggleComplete={onToggleComplete}
+      dragHandle={<Sortable.Handle><DragHandle /></Sortable.Handle>}
+      isActive={isActive.value}
+    />
+  );
+}
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+export default function TasksScreen() {
+  const { todos, loading, createTodo, updateTodo, deleteTodo, completeTodo, reorderTodos } = useTodos();
+  const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  const [formVisible, setFormVisible] = useState(false);
+  const [deleteConfirmTodo, setDeleteConfirmTodo] = useState<Todo | null>(null);
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+
+  const activeTodos = useMemo(() => {
+    return todos
+      .filter(t => t.completedAt === null)
+      .sort((a, b) => a.order - b.order);
+  }, [todos]);
+
+  const handleCreate = async (name: string, notes?: string) => {
+    await createTodo(name, notes);
+  };
+
+  const handleEdit = async (name: string, notes?: string) => {
+    if (editingTodo) {
+      await updateTodo(editingTodo.id, { name, notes });
+      setEditingTodo(null);
+    }
+  };
+
+  const handleDeleteClick = (todo: Todo) => {
+    setDeleteConfirmTodo(todo);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (deleteConfirmTodo) {
+      await deleteTodo(deleteConfirmTodo.id);
+      setDeleteConfirmTodo(null);
+    }
+  };
+
+  const handleComplete = async (id: string) => {
+    await completeTodo(id);
+  };
+
+  const handleDragEnd = async ({ fromIndex, toIndex }: { fromIndex: number; toIndex: number; data: Todo[] }) => {
+    await reorderTodos(fromIndex, toIndex);
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.tint} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.header}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Tasks</Text>
+          <TouchableOpacity
+            style={[styles.addButton, { backgroundColor: colors.tint }]}
+            onPress={() => {
+              setEditingTodo(null);
+              setFormVisible(true);
+            }}
+          >
+            <IconSymbol name="plus" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        {activeTodos.length === 0 ? (
+          <EmptyState
+            title="No tasks yet"
+            message="Tap the + button to create your first task"
+          />
+        ) : (
+          <View style={styles.list}>
+            <Sortable.Grid
+              data={activeTodos}
+              columns={1}
+              onDragEnd={handleDragEnd}
+              keyExtractor={(item) => item.id}
+              customHandle={true}
+              renderItem={({ item }) => (
+                <SortableTodoItem
+                  item={item}
+                  onEdit={() => {
+                    setEditingTodo(item);
+                    setFormVisible(true);
+                  }}
+                  onDelete={() => handleDeleteClick(item)}
+                  onToggleComplete={() => handleComplete(item.id)}
+                />
+              )}
+            />
+          </View>
+        )}
+
+        <TodoForm
+          visible={formVisible}
+          todo={editingTodo}
+          onClose={() => {
+            setFormVisible(false);
+            setEditingTodo(null);
+          }}
+          onSubmit={editingTodo ? handleEdit : handleCreate}
+        />
+
+        <DeleteConfirmModal
+          visible={deleteConfirmTodo !== null}
+          taskName={deleteConfirmTodo?.name || ''}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteConfirmTodo(null)}
+        />
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  addButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  list: {
+    flex: 1,
+    width: '100%',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
   },
 });
