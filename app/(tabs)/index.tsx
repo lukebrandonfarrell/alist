@@ -10,37 +10,15 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Todo } from '@/types/todo';
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { NestableDraggableFlatList, NestableScrollContainer } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { useAnimatedRef } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Sortable, { useItemContext } from 'react-native-sortables';
-
-function SortableTodoItem({ item, onEdit, onDelete, onToggleComplete }: {
-  item: Todo;
-  onEdit: () => void;
-  onDelete: () => void;
-  onToggleComplete: () => void;
-}) {
-  const { isActive } = useItemContext();
-
-  return (
-    <TodoItem
-      todo={item}
-      onEdit={onEdit}
-      onDelete={onDelete}
-      onToggleComplete={onToggleComplete}
-      dragHandle={<Sortable.Handle><DragHandle /></Sortable.Handle>}
-      isActive={isActive.value}
-    />
-  );
-}
 
 export default function TasksScreen() {
   const { todos, loading, createTodo, updateTodo, deleteTodo, completeTodo, reorderTodos } = useTodos();
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const [formVisible, setFormVisible] = useState(false);
   const [deleteConfirmTodo, setDeleteConfirmTodo] = useState<Todo | null>(null);
-  const animatedScrollRef = useAnimatedRef<Animated.ScrollView>();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
 
@@ -76,8 +54,22 @@ export default function TasksScreen() {
     await completeTodo(id);
   };
 
-  const handleDragEnd = async ({ fromIndex, toIndex }: { fromIndex: number; toIndex: number }) => {
-    await reorderTodos(fromIndex, toIndex);
+  const handleDragEnd = async ({ data: reorderedData }: { data: Todo[] }) => {
+    // Compare current order with new order to find what changed
+    const currentIds = activeTodos.map(t => t.id);
+    const newIds = reorderedData.map(t => t.id);
+    
+    // Find the first difference to determine fromIndex and toIndex
+    for (let i = 0; i < currentIds.length; i++) {
+      if (currentIds[i] !== newIds[i]) {
+        const fromIndex = currentIds.indexOf(newIds[i]);
+        const toIndex = i;
+        if (fromIndex !== -1) {
+          await reorderTodos(fromIndex, toIndex);
+          return;
+        }
+      }
+    }
   };
 
   if (loading) {
@@ -112,34 +104,31 @@ export default function TasksScreen() {
             message="Tap the + button to create your first task"
           />
         ) : (
-          <Animated.ScrollView
-            ref={animatedScrollRef}
-            style={styles.list}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={true}
-          >
-            <View style={styles.sortableContainer}>
-              <Sortable.Flex
-                onDragEnd={handleDragEnd}
-                customHandle={true}
-                flexDirection="column"
-                scrollableRef={animatedScrollRef}
-              >
-                {activeTodos.map((item) => (
-                  <SortableTodoItem
-                    key={item.id}
-                    item={item}
-                    onEdit={() => {
-                      setEditingTodo(item);
-                      setFormVisible(true);
-                    }}
-                    onDelete={() => handleDeleteClick(item)}
-                    onToggleComplete={() => handleComplete(item.id)}
-                  />
-                ))}
-              </Sortable.Flex>
-            </View>
-          </Animated.ScrollView>
+          <NestableScrollContainer style={styles.list}>
+            <NestableDraggableFlatList
+              data={activeTodos}
+              onDragEnd={handleDragEnd}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item, drag, isActive }) => (
+                <TodoItem
+                  todo={item}
+                  onEdit={() => {
+                    setEditingTodo(item);
+                    setFormVisible(true);
+                  }}
+                  onDelete={() => handleDeleteClick(item)}
+                  onToggleComplete={() => handleComplete(item.id)}
+                  dragHandle={
+                    <TouchableOpacity onPressIn={drag}>
+                      <DragHandle />
+                    </TouchableOpacity>
+                  }
+                  isActive={isActive}
+                />
+              )}
+              contentContainerStyle={styles.listContent}
+            />
+          </NestableScrollContainer>
         )}
 
         <TodoForm
@@ -196,10 +185,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingVertical: 8,
-    paddingBottom: 60,
-  },
-  sortableContainer: {
-    width: '100%',
     paddingHorizontal: 16,
+    paddingBottom: 60,
   },
 });
