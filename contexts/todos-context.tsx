@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { Todo } from '@/types/todo';
 import { loadTodos, saveTodos } from '@/lib/storage';
+import { Todo } from '@/types/todo';
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 interface TodosContextType {
   todos: Todo[];
@@ -11,6 +11,8 @@ interface TodosContextType {
   completeTodo: (id: string) => Promise<void>;
   restoreTodo: (id: string) => Promise<void>;
   reorderTodos: (fromIndex: number, toIndex: number) => Promise<void>;
+  focusTodo: (id: string) => Promise<void>;
+  unfocusTodo: (id: string) => Promise<void>;
 }
 
 const TodosContext = createContext<TodosContextType | undefined>(undefined);
@@ -44,6 +46,8 @@ export function TodosProvider({ children }: { children: ReactNode }) {
       notes,
       completedAt: null,
       order: maxOrder + 1,
+      focusedAt: null,
+      timeSpent: null,
     };
 
     await persistTodos([...todos, newTodo]);
@@ -62,9 +66,25 @@ export function TodosProvider({ children }: { children: ReactNode }) {
   }, [todos, persistTodos]);
 
   const completeTodo = useCallback(async (id: string) => {
-    const updated = todos.map(t => 
-      t.id === id ? { ...t, completedAt: new Date().toISOString() } : t
-    );
+    const now = new Date();
+    const updated = todos.map(t => {
+      if (t.id === id) {
+        let timeSpent = null;
+        // If task was focused, calculate time spent
+        if (t.focusedAt) {
+          const focusedTime = new Date(t.focusedAt).getTime();
+          const completedTime = now.getTime();
+          timeSpent = Math.floor((completedTime - focusedTime) / 1000); // Time in seconds
+        }
+        return {
+          ...t,
+          completedAt: now.toISOString(),
+          timeSpent,
+          focusedAt: null, // Clear focus when completing
+        };
+      }
+      return t;
+    });
     await persistTodos(updated);
   }, [todos, persistTodos]);
 
@@ -75,7 +95,31 @@ export function TodosProvider({ children }: { children: ReactNode }) {
       : -1;
     
     const updated = todos.map(t => 
-      t.id === id ? { ...t, completedAt: null, order: maxOrder + 1 } : t
+      t.id === id ? { 
+        ...t, 
+        completedAt: null, 
+        order: maxOrder + 1,
+        focusedAt: null,
+        timeSpent: null,
+      } : t
+    );
+    await persistTodos(updated);
+  }, [todos, persistTodos]);
+
+  const focusTodo = useCallback(async (id: string) => {
+    // Focus the selected todo (allow multiple tasks to be focused)
+    const updated = todos.map(t => {
+      if (t.id === id && !t.completedAt) {
+        return { ...t, focusedAt: new Date().toISOString() };
+      }
+      return t;
+    });
+    await persistTodos(updated);
+  }, [todos, persistTodos]);
+
+  const unfocusTodo = useCallback(async (id: string) => {
+    const updated = todos.map(t => 
+      t.id === id ? { ...t, focusedAt: null } : t
     );
     await persistTodos(updated);
   }, [todos, persistTodos]);
@@ -106,6 +150,8 @@ export function TodosProvider({ children }: { children: ReactNode }) {
         completeTodo,
         restoreTodo,
         reorderTodos,
+        focusTodo,
+        unfocusTodo,
       }}
     >
       {children}

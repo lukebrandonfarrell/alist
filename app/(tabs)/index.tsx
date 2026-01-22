@@ -1,5 +1,4 @@
 import { DeleteConfirmModal } from '@/components/todo/delete-confirm-modal';
-import { DragHandle } from '@/components/todo/drag-handle';
 import { EmptyState } from '@/components/todo/empty-state';
 import { TodoForm } from '@/components/todo/todo-form';
 import { TodoItem } from '@/components/todo/todo-item';
@@ -12,15 +11,16 @@ import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { NestableDraggableFlatList, NestableScrollContainer } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TasksScreen() {
-  const { todos, loading, createTodo, updateTodo, deleteTodo, completeTodo, reorderTodos } = useTodos();
+  const { todos, loading, createTodo, updateTodo, deleteTodo, completeTodo, reorderTodos, focusTodo, unfocusTodo } = useTodos();
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const [formVisible, setFormVisible] = useState(false);
   const [deleteConfirmTodo, setDeleteConfirmTodo] = useState<Todo | null>(null);
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
+  const insets = useSafeAreaInsets();
 
   const activeTodos = useMemo(() => {
     return todos
@@ -74,41 +74,47 @@ export default function TasksScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.tint} />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
+  const renderListHeader = () => (
+    <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+      <Text style={[styles.headerTitle, { color: colors.text }]}>Tasks</Text>
+      <TouchableOpacity
+        style={[styles.addButton, { backgroundColor: colors.tint }]}
+        onPress={() => {
+          setEditingTodo(null);
+          setFormVisible(true);
+        }}
+      >
+        <IconSymbol name="plus" size={20} color="#fff" />
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <GestureHandlerRootView style={styles.container}>
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Tasks</Text>
-          <TouchableOpacity
-            style={[styles.addButton, { backgroundColor: colors.tint }]}
-            onPress={() => {
-              setEditingTodo(null);
-              setFormVisible(true);
-            }}
-          >
-            <IconSymbol name="plus" size={20} color="#fff" />
-          </TouchableOpacity>
-        </View>
-
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         {activeTodos.length === 0 ? (
-          <EmptyState
-            title="No tasks yet"
-            message="Tap the + button to create your first task"
-          />
+          <View style={{ flex: 1, paddingHorizontal: 16 }}>
+            {renderListHeader()}
+            <EmptyState
+              title="No tasks yet"
+              message="Tap the + button to create your first task"
+            />
+          </View>
         ) : (
           <NestableScrollContainer style={styles.list}>
             <NestableDraggableFlatList
               data={activeTodos}
               onDragEnd={handleDragEnd}
               keyExtractor={(item) => item.id}
+              ListHeaderComponent={renderListHeader}
               renderItem={({ item, drag, isActive }) => (
                 <TodoItem
                   todo={item}
@@ -118,11 +124,9 @@ export default function TasksScreen() {
                   }}
                   onDelete={() => handleDeleteClick(item)}
                   onToggleComplete={() => handleComplete(item.id)}
-                  dragHandle={
-                    <TouchableOpacity onPressIn={drag}>
-                      <DragHandle />
-                    </TouchableOpacity>
-                  }
+                  onFocus={() => focusTodo(item.id)}
+                  onUnfocus={() => unfocusTodo(item.id)}
+                  onDrag={drag}
                   isActive={isActive}
                 />
               )}
@@ -147,7 +151,7 @@ export default function TasksScreen() {
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeleteConfirmTodo(null)}
         />
-      </SafeAreaView>
+      </View>
     </GestureHandlerRootView>
   );
 }
@@ -165,7 +169,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 4,
     paddingVertical: 12,
   },
   headerTitle: {
@@ -186,6 +190,6 @@ const styles = StyleSheet.create({
   listContent: {
     paddingVertical: 8,
     paddingHorizontal: 16,
-    paddingBottom: 60,
+    paddingBottom: 120,
   },
 });

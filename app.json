@@ -10,7 +10,8 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Alist"
+      "bundleIdentifier": "com.anonymous.Alist",
+      "deploymentTarget": "16.2"
     },
     "android": {
       "adaptiveIcon": {

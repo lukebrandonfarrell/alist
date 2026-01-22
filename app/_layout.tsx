@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
+import { LiveActivitiesManager } from '@/components/todo/live-activities';
 import { TodosProvider } from '@/contexts/todos-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -20,6 +21,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />
+        <LiveActivitiesManager />
       </ThemeProvider>
     </TodosProvider>
   );
