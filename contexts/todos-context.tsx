@@ -1,6 +1,9 @@
+import { createTodoLiveActivityUI } from '@/components/todo/todo-live-activity';
 import { loadTodos, saveTodos } from '@/lib/storage';
 import { Todo } from '@/types/todo';
-import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
+import { addVoltraListener, startLiveActivity, stopLiveActivity } from 'voltra/client';
 
 interface TodosContextType {
   todos: Todo[];
@@ -20,6 +23,16 @@ const TodosContext = createContext<TodosContextType | undefined>(undefined);
 export function TodosProvider({ children }: { children: ReactNode }) {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
+  const activityIdsRef = useRef<Map<string, string>>(new Map()); // Maps todo ID -> activity ID
+  const todoIdsByActivityRef = useRef<Map<string, string>>(new Map()); // Maps activity ID -> todo ID
+  const activityNamesRef = useRef<Map<string, string>>(new Map()); // Maps todo ID -> activity name
+
+  /**
+   * Get the activity name for a todo
+   */
+  const getActivityName = useCallback((todoId: string) => {
+    return `focused-task-${todoId}`;
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -61,12 +74,65 @@ export function TodosProvider({ children }: { children: ReactNode }) {
   }, [todos, persistTodos]);
 
   const deleteTodo = useCallback(async (id: string) => {
+    // Stop the Live Activity if the task being deleted has one
+    if (Platform.OS === 'ios') {
+      const activityId = activityIdsRef.current.get(id);
+      
+      // Check if activity exists in our refs
+      if (activityId) {
+        try {
+          // Try to stop the activity - it's safe to stop even if already stopped
+          await stopLiveActivity(activityId, {
+            dismissalPolicy: { after: 0 }, // Dismiss immediately
+          });
+          console.log('Live Activity stopped for deleted todo:', id);
+        } catch (error) {
+          // Activity might already be stopped or not exist - that's okay
+          console.log('Live Activity stop attempt (may already be stopped):', error);
+        }
+        // Always clear activity references
+        const activityName = activityNamesRef.current.get(id);
+        todoIdsByActivityRef.current.delete(activityId);
+        activityIdsRef.current.delete(id);
+        if (activityName) {
+          activityNamesRef.current.delete(id);
+        }
+      }
+    }
+
     const filtered = todos.filter(t => t.id !== id);
     await persistTodos(filtered);
   }, [todos, persistTodos]);
 
   const completeTodo = useCallback(async (id: string) => {
     const now = new Date();
+    
+    // Stop the Live Activity if task was focused
+    if (Platform.OS === 'ios') {
+      const activityId = activityIdsRef.current.get(id);
+      
+      // Check if activity exists in our refs
+      if (activityId) {
+        try {
+          // Try to stop the activity - it's safe to stop even if already stopped
+          await stopLiveActivity(activityId, {
+            dismissalPolicy: { after: 0 }, // Dismiss immediately
+          });
+          console.log('Live Activity stopped for completed todo:', id);
+        } catch (error) {
+          // Activity might already be stopped or not exist - that's okay
+          console.log('Live Activity stop attempt (may already be stopped):', error);
+        }
+        // Always clear activity references
+        const activityName = activityNamesRef.current.get(id);
+        todoIdsByActivityRef.current.delete(activityId);
+        activityIdsRef.current.delete(id);
+        if (activityName) {
+          activityNamesRef.current.delete(id);
+        }
+      }
+    }
+
     const updated = todos.map(t => {
       if (t.id === id) {
         let timeSpent = null;
@@ -106,22 +172,112 @@ export function TodosProvider({ children }: { children: ReactNode }) {
     await persistTodos(updated);
   }, [todos, persistTodos]);
 
+  // Set up Voltra interaction listener for Live Activity buttons
+  // This must be after completeTodo is defined
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+
+    const subscription = addVoltraListener('interaction', (event) => {
+      console.log('Live Activity interaction:', event.identifier);
+      console.log('Payload:', event.payload);
+
+      // Handle done button interactions
+      if (event.identifier?.startsWith('done-button-')) {
+        const todoId = event.identifier.replace('done-button-', '');
+        console.log('Done button pressed for todo:', todoId);
+        console.log('Activity ID in refs:', activityIdsRef.current.get(todoId));
+        console.log('Activity name in refs:', activityNamesRef.current.get(todoId));
+        
+        // Complete the todo (which will also stop the Live Activity)
+        completeTodo(todoId)
+          .then(() => {
+            console.log('Todo completed successfully from Live Activity');
+          })
+          .catch((error) => {
+            console.error('Failed to complete todo from Live Activity:', error);
+          });
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [completeTodo]); // Depend on completeTodo so we have access to it
+
   const focusTodo = useCallback(async (id: string) => {
     // Focus the selected todo (allow multiple tasks to be focused)
+    const todo = todos.find(t => t.id === id && !t.completedAt);
+    if (!todo) return;
+
+    const focusedAt = new Date().toISOString();
+    const startAtMs = Date.now();
+
     const updated = todos.map(t => {
       if (t.id === id && !t.completedAt) {
-        return { ...t, focusedAt: new Date().toISOString() };
+        return { ...t, focusedAt };
       }
       return t;
     });
     await persistTodos(updated);
-  }, [todos, persistTodos]);
+
+    // Start live activity on iOS
+    if (Platform.OS === 'ios') {
+      // Use factory function to create UI - this avoids React component rendering issues
+      const activityUI = createTodoLiveActivityUI({
+        todo,
+        startAtMs,
+        onComplete: async () => {
+          // Complete the todo when Done button is pressed
+          await completeTodo(id);
+        },
+      });
+
+      try {
+        const activityName = getActivityName(id);
+        const activityId = await startLiveActivity({
+          lockScreen: activityUI,
+        });
+        // Store mappings: todo ID -> activity ID, activity ID -> todo ID, and todo ID -> activity name
+        activityIdsRef.current.set(id, activityId);
+        todoIdsByActivityRef.current.set(activityId, id);
+        activityNamesRef.current.set(id, activityName);
+      } catch (error) {
+        console.error('Failed to start live activity:', error);
+      }
+    }
+  }, [todos, persistTodos, completeTodo, getActivityName]);
 
   const unfocusTodo = useCallback(async (id: string) => {
     const updated = todos.map(t => 
       t.id === id ? { ...t, focusedAt: null } : t
     );
     await persistTodos(updated);
+
+    // Stop the Live Activity when focus is cancelled
+    if (Platform.OS === 'ios') {
+      const activityId = activityIdsRef.current.get(id);
+      
+      // Check if activity exists in our refs
+      if (activityId) {
+        try {
+          // Try to stop the activity - it's safe to stop even if already stopped
+          await stopLiveActivity(activityId, {
+            dismissalPolicy: { after: 0 }, // Dismiss immediately
+          });
+          console.log('Live Activity stopped for unfocused todo:', id);
+        } catch (error) {
+          // Activity might already be stopped or not exist - that's okay
+          console.log('Live Activity stop attempt (may already be stopped):', error);
+        }
+        // Always clear activity references
+        const activityName = activityNamesRef.current.get(id);
+        todoIdsByActivityRef.current.delete(activityId);
+        activityIdsRef.current.delete(id);
+        if (activityName) {
+          activityNamesRef.current.delete(id);
+        }
+      }
+    }
   }, [todos, persistTodos]);
 
   const reorderTodos = useCallback(async (fromIndex: number, toIndex: number) => {

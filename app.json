@@ -29,6 +29,20 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "17.0"
+          }
+        }
+      ],
+      [
+        "voltra",
+        {
+          "groupIdentifier": "group.com.anonymous.Alist"
+        }
+      ],
       "expo-router",
       [
         "expo-splash-screen",
@@ -41,7 +55,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-build-properties"
     ],
     "experiments": {
       "typedRoutes": true,

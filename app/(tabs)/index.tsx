@@ -1,4 +1,3 @@
-import { DeleteConfirmModal } from '@/components/todo/delete-confirm-modal';
 import { EmptyState } from '@/components/todo/empty-state';
 import { TodoForm } from '@/components/todo/todo-form';
 import { TodoItem } from '@/components/todo/todo-item';
@@ -17,7 +16,6 @@ export default function TasksScreen() {
   const { todos, loading, createTodo, updateTodo, deleteTodo, completeTodo, reorderTodos, focusTodo, unfocusTodo } = useTodos();
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const [formVisible, setFormVisible] = useState(false);
-  const [deleteConfirmTodo, setDeleteConfirmTodo] = useState<Todo | null>(null);
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
@@ -39,15 +37,8 @@ export default function TasksScreen() {
     }
   };
 
-  const handleDeleteClick = (todo: Todo) => {
-    setDeleteConfirmTodo(todo);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (deleteConfirmTodo) {
-      await deleteTodo(deleteConfirmTodo.id);
-      setDeleteConfirmTodo(null);
-    }
+  const handleDelete = async (id: string) => {
+    await deleteTodo(id);
   };
 
   const handleComplete = async (id: string) => {
@@ -84,7 +75,7 @@ export default function TasksScreen() {
 
   const renderListHeader = () => (
     <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-      <Text style={[styles.headerTitle, { color: colors.text }]}>Tasks</Text>
+      <Text style={[styles.headerTitle, { color: colors.text }]}>Actions</Text>
       <TouchableOpacity
         style={[styles.addButton, { backgroundColor: colors.tint }]}
         onPress={() => {
@@ -122,7 +113,7 @@ export default function TasksScreen() {
                     setEditingTodo(item);
                     setFormVisible(true);
                   }}
-                  onDelete={() => handleDeleteClick(item)}
+                  onDelete={() => handleDelete(item.id)}
                   onToggleComplete={() => handleComplete(item.id)}
                   onFocus={() => focusTodo(item.id)}
                   onUnfocus={() => unfocusTodo(item.id)}
@@ -143,13 +134,6 @@ export default function TasksScreen() {
             setEditingTodo(null);
           }}
           onSubmit={editingTodo ? handleEdit : handleCreate}
-        />
-
-        <DeleteConfirmModal
-          visible={deleteConfirmTodo !== null}
-          taskName={deleteConfirmTodo?.name || ''}
-          onConfirm={handleDeleteConfirm}
-          onCancel={() => setDeleteConfirmTodo(null)}
         />
       </View>
     </GestureHandlerRootView>

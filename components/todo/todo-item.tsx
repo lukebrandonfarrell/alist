@@ -17,7 +17,7 @@ interface TodoItemProps {
   onDrag?: () => void; 
 }
 
-export function TodoItem({
+export const TodoItem = React.forwardRef<React.ElementRef<typeof TouchableOpacity>, TodoItemProps>(({
   todo,
   onEdit,
   onDelete,
@@ -27,12 +27,13 @@ export function TodoItem({
   isActive,
   canDrag = true,
   onDrag,
-}: TodoItemProps) {
+}, ref) => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const isCompleted = todo.completedAt !== null;
   const isFocused = todo.focusedAt !== null && !isCompleted;
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
 
   const handlePress = () => {
     if (isFocused) {
@@ -53,6 +54,39 @@ export function TodoItem({
       );
     } else {
       onFocus();
+    }
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Task?',
+      `Are you sure you want to delete "${todo.name}"? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: onDelete,
+        },
+      ]
+    );
+  };
+
+  // Handle completion with delay to show strike-through
+  const handleToggleComplete = () => {
+    if (!isCompleted && !isAnimating) {
+      setIsAnimating(true);
+      // Show strike-through for a moment before completing
+      setTimeout(() => {
+        onToggleComplete();
+        setIsAnimating(false);
+      }, 250); // Show for ~0.8 seconds
+    } else if (!isCompleted) {
+      // If already animating, just complete immediately
+      onToggleComplete();
     }
   };
 
@@ -91,6 +125,7 @@ export function TodoItem({
 
   return (
     <TouchableOpacity
+      ref={ref}
       style={[
         styles.container,
         { 
@@ -102,17 +137,30 @@ export function TodoItem({
       activeOpacity={0.7}
       disabled={isCompleted}
     >
-      {isFocused && (
-        <View style={styles.timerContainer}>
-          <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
-        </View>
-      )}
-      {isCompleted && todo.timeSpent !== null && (
-        <View style={styles.timerContainer}>
-          <Text style={styles.completedTimeText}>{formatTime(todo.timeSpent)}</Text>
-        </View>
-      )}
-      <View style={styles.topRow}>
+      <View style={styles.content}>
+        <Text
+          style={[
+            styles.name,
+            { color: isFocused ? '#fff' : colors.text },
+            (isCompleted || isAnimating) && styles.completedText,
+          ]}
+        >
+          {todo.name}
+        </Text>
+        {todo.notes && (
+          <Text
+            style={[
+              styles.notes,
+              { color: isFocused ? '#fff' : colors.icon },
+              (isCompleted || isAnimating) && styles.completedText,
+            ]}
+          >
+            {todo.notes}
+          </Text>
+        )}
+      </View>
+
+      <View style={styles.controlsRow}>
         {canDrag && (
           <TouchableOpacity disabled={!canDrag} onPressIn={onDrag} style={styles.dragHandleContainer}>
             <IconSymbol 
@@ -123,74 +171,60 @@ export function TodoItem({
           </TouchableOpacity>
         )}
         
-        <View style={styles.content}>
-          <Text
-            style={[
-              styles.name,
-              { color: isFocused ? '#fff' : colors.text },
-              isCompleted && styles.completedText,
-            ]}
+        <View style={styles.actionsContainer}>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={onEdit}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            {todo.name}
-          </Text>
-          {todo.notes && (
-            <Text
-              style={[
-                styles.notes,
-                { color: isFocused ? '#fff' : colors.icon },
-                isCompleted && styles.completedText,
-              ]}
-            >
-              {todo.notes}
-            </Text>
-          )}
+            <IconSymbol 
+              name="square.and.pencil" 
+              size={16} 
+              color={isFocused ? '#fff' : colors.icon} 
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={handleDelete}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <IconSymbol 
+              name="trash" 
+              size={16} 
+              color={isFocused ? '#fff' : '#e53935'} 
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.checkbox}
+            onPress={handleToggleComplete}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            {!isCompleted && (
+              <IconSymbol 
+                name="checkmark.circle" 
+                size={20} 
+                color={isFocused ? '#fff' : '#34C759'} 
+              />
+            )}
+          </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.actionsContainer}>
-        <TouchableOpacity
-          style={styles.editButton}
-          onPress={onEdit}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <IconSymbol 
-            name="pencil" 
-            size={16} 
-            color={isFocused ? '#fff' : colors.icon} 
-          />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={onDelete}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <IconSymbol 
-            name="trash" 
-            size={16} 
-            color={isFocused ? '#fff' : '#e53935'} 
-          />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.checkbox,
-          ]}
-          onPress={onToggleComplete}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          {isCompleted ? (
-            <IconSymbol name="checkmark.circle.fill" size={20} color="#6E52E2" />
-          ) : (
-            <IconSymbol 
-              name="checkmark.circle" 
-              size={20} 
-              color={isFocused ? '#fff' : '#999'} 
-            />
-          )}
-        </TouchableOpacity>
-      </View>
+      {(isFocused || (isCompleted && todo.timeSpent !== null)) && (
+        <View style={styles.timerContainer}>
+          <Text style={[
+            isFocused ? styles.timerText : styles.completedTimeText,
+            !isFocused && { color: colors.icon }
+          ]}>
+            {isFocused ? formatTime(elapsedSeconds) : formatTime(todo.timeSpent!)}
+          </Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
-}
+});
+
+TodoItem.displayName = 'TodoItem';
 
 const styles = StyleSheet.create({
   container: {
@@ -210,16 +244,23 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     transform: [{ scale: 1.02 }],
   },
-  topRow: {
+  content: {
+    marginBottom: 4,
+  },
+  controlsRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
   },
   dragHandleContainer: {
-    marginRight: 8,
+    marginRight: 'auto',
   },
-  content: {
-    flex: 1,
+  actionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 'auto',
   },
   timerContainer: {
     position: 'absolute',
@@ -236,7 +277,6 @@ const styles = StyleSheet.create({
   completedTimeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6E52E2',
     opacity: 0.8,
   },
   name: {
@@ -251,12 +291,6 @@ const styles = StyleSheet.create({
   completedText: {
     textDecorationLine: 'line-through',
     opacity: 0.6,
-  },
-  actionsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 8,
   },
   checkbox: {
     justifyContent: 'center',

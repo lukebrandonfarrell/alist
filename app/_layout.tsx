@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
-// import { LiveActivitiesManager } from '@/components/todo/live-activities';
+import { HabitsProvider } from '@/contexts/habits-context';
 import { TodosProvider } from '@/contexts/todos-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -16,13 +16,14 @@ export default function RootLayout() {
 
   return (
     <TodosProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        </Stack>
-        <StatusBar style="auto" />
-        {/* <LiveActivitiesManager /> */}
-      </ThemeProvider>
+      <HabitsProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          </Stack>
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </HabitsProvider>
     </TodosProvider>
   );
 }

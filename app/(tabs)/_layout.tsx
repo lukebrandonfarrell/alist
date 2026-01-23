@@ -1,4 +1,4 @@
-import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
+import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import React from 'react';
 
 import { Colors } from '@/constants/theme';
@@ -13,11 +13,15 @@ export default function TabLayout() {
     >
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: 'list.bullet', selected: 'list.bullet' }} />
-        <Label>Tasks</Label>
+        <Label>Actions</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="completed">
         <Icon sf={{ default: 'checkmark.circle', selected: 'checkmark.circle.fill' }} />
         <Label>Completed</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="habits">
+        <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
+        <Label>Habits</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

@@ -1,4 +1,3 @@
-import { DeleteConfirmModal } from '@/components/todo/delete-confirm-modal';
 import { EmptyState } from '@/components/todo/empty-state';
 import { TodoItem } from '@/components/todo/todo-item';
 import { Colors } from '@/constants/theme';
@@ -6,13 +5,12 @@ import { useTodos } from '@/contexts/todos-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { formatCompletedDate, groupTodosByDate, isToday } from '@/lib/date-utils';
 import { Todo } from '@/types/todo';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { ActivityIndicator, SectionList, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function CompletedScreen() {
   const { todos, loading, deleteTodo, restoreTodo, unfocusTodo } = useTodos();
-  const [deleteConfirmTodo, setDeleteConfirmTodo] = useState<Todo | null>(null);
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
@@ -44,8 +42,8 @@ export default function CompletedScreen() {
       {sections.length === 0 ? (
         <View style={{ paddingTop: insets.top }}>
           <EmptyState
-            title="No completed tasks"
-            message="Tasks you complete will appear here"
+            title="No completed actions"
+            message="Actions you complete will appear here"
           />
         </View>
       ) : (
@@ -83,7 +81,7 @@ export default function CompletedScreen() {
             <TodoItem
               todo={item}
               onEdit={() => {}}
-              onDelete={() => setDeleteConfirmTodo(item)}
+              onDelete={() => deleteTodo(item.id)}
               onToggleComplete={() => restoreTodo(item.id)}
               onFocus={() => {}}
               onUnfocus={() => unfocusTodo(item.id)}
@@ -93,18 +91,6 @@ export default function CompletedScreen() {
           contentContainerStyle={styles.listContent}
         />
       )}
-
-      <DeleteConfirmModal
-        visible={deleteConfirmTodo !== null}
-        taskName={deleteConfirmTodo?.name || ''}
-        onConfirm={async () => {
-          if (deleteConfirmTodo) {
-            await deleteTodo(deleteConfirmTodo.id);
-            setDeleteConfirmTodo(null);
-          }
-        }}
-        onCancel={() => setDeleteConfirmTodo(null)}
-      />
     </View>
   );
 }

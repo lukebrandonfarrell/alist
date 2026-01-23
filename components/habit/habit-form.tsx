@@ -1,20 +1,19 @@
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Todo } from '@/types/todo';
+import { Habit } from '@/types/habit';
 import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-interface TodoFormProps {
+interface HabitFormProps {
   visible: boolean;
-  todo?: Todo | null;
+  habit?: Habit | null;
   onClose: () => void;
-  onSubmit: (name: string, notes?: string) => void;
+  onSubmit: (name: string) => void;
 }
 
-export function TodoForm({ visible, todo, onClose, onSubmit }: TodoFormProps) {
+export function HabitForm({ visible, habit, onClose, onSubmit }: HabitFormProps) {
   const [name, setName] = useState('');
-  const [notes, setNotes] = useState('');
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const translateY = useSharedValue(500);
@@ -31,14 +30,12 @@ export function TodoForm({ visible, todo, onClose, onSubmit }: TodoFormProps) {
   }, [visible]);
 
   useEffect(() => {
-    if (todo) {
-      setName(todo.name);
-      setNotes(todo.notes || '');
+    if (habit) {
+      setName(habit.name);
     } else {
       setName('');
-      setNotes('');
     }
-  }, [todo, visible]);
+  }, [habit, visible]);
 
   const modalAnimatedStyle = useAnimatedStyle(() => {
     return {
@@ -54,9 +51,8 @@ export function TodoForm({ visible, todo, onClose, onSubmit }: TodoFormProps) {
 
   const handleSubmit = () => {
     if (name.trim()) {
-      onSubmit(name.trim(), notes.trim() || undefined);
+      onSubmit(name.trim());
       setName('');
-      setNotes('');
       onClose();
     }
   };
@@ -76,7 +72,7 @@ export function TodoForm({ visible, todo, onClose, onSubmit }: TodoFormProps) {
           <Animated.View style={[styles.modal, { backgroundColor: colors.background }, modalAnimatedStyle]}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.text }]}>
-              {todo ? 'Edit Task' : 'New Task'}
+              {habit ? 'Edit Habit' : 'New Habit'}
             </Text>
             <TouchableOpacity onPress={onClose}>
               <Text style={[styles.closeButton, { color: colors.tint }]}>Cancel</Text>
@@ -85,7 +81,7 @@ export function TodoForm({ visible, todo, onClose, onSubmit }: TodoFormProps) {
 
           <TextInput
             style={[styles.input, { color: colors.text, borderColor: colors.icon }]}
-            placeholder="Task name"
+            placeholder="Habit name"
             placeholderTextColor={colors.icon}
             value={name}
             onChangeText={setName}
@@ -93,22 +89,12 @@ export function TodoForm({ visible, todo, onClose, onSubmit }: TodoFormProps) {
             onSubmitEditing={handleSubmit}
           />
 
-          <TextInput
-            style={[styles.input, styles.notesInput, { color: colors.text, borderColor: colors.icon }]}
-            placeholder="Notes (optional)"
-            placeholderTextColor={colors.icon}
-            value={notes}
-            onChangeText={setNotes}
-            multiline
-            numberOfLines={3}
-          />
-
           <TouchableOpacity
             style={[styles.submitButton, { backgroundColor: colors.tint }]}
             onPress={handleSubmit}
           >
             <Text style={styles.submitButtonText}>
-              {todo ? 'Save' : 'Create'}
+              {habit ? 'Save' : 'Create'}
             </Text>
           </TouchableOpacity>
           </Animated.View>
@@ -153,10 +139,6 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     marginBottom: 12,
-  },
-  notesInput: {
-    height: 80,
-    textAlignVertical: 'top',
   },
   submitButton: {
     borderRadius: 8,
