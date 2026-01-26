@@ -1,6 +1,7 @@
 import { createTodoLiveActivityUI } from '@/components/todo/todo-live-activity';
-import { loadTodos, saveTodos } from '@/lib/storage';
+import { deleteTodo as deleteTodoFromDb, loadTodos, saveTodo, updateTodo as updateTodoInDb } from '@/lib/storage';
 import { Todo } from '@/types/todo';
+import { useSQLiteContext } from 'expo-sqlite';
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { addVoltraListener, startLiveActivity, stopLiveActivity } from 'voltra/client';
@@ -8,7 +9,7 @@ import { addVoltraListener, startLiveActivity, stopLiveActivity } from 'voltra/c
 interface TodosContextType {
   todos: Todo[];
   loading: boolean;
-  createTodo: (name: string, notes?: string) => Promise<void>;
+  createTodo: (name: string, notes?: string, insertIndex?: number) => Promise<void>;
   updateTodo: (id: string, updates: Partial<Todo>) => Promise<void>;
   deleteTodo: (id: string) => Promise<void>;
   completeTodo: (id: string) => Promise<void>;
@@ -21,6 +22,7 @@ interface TodosContextType {
 const TodosContext = createContext<TodosContextType | undefined>(undefined);
 
 export function TodosProvider({ children }: { children: ReactNode }) {
+  const db = useSQLiteContext();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
   const activityIdsRef = useRef<Map<string, string>>(new Map()); // Maps todo ID -> activity ID
@@ -36,42 +38,69 @@ export function TodosProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const loaded = await loadTodos();
-      setTodos(loaded);
-      setLoading(false);
+      try {
+        const loaded = await loadTodos(db);
+        setTodos(loaded);
+      } catch (error) {
+        console.error('Error loading todos:', error);
+      } finally {
+        setLoading(false);
+      }
     })();
-  }, []);
+  }, [db]);
 
-  const persistTodos = useCallback(async (newTodos: Todo[]) => {
-    setTodos(newTodos);
-    await saveTodos(newTodos);
-  }, []);
-
-  const createTodo = useCallback(async (name: string, notes?: string) => {
-    const activeTodos = todos.filter(t => t.completedAt === null);
-    const maxOrder = activeTodos.length > 0 
-      ? Math.max(...activeTodos.map(t => t.order))
-      : -1;
+  const createTodo = useCallback(async (name: string, notes?: string, insertIndex?: number) => {
+    const activeTodos = todos
+      .filter(t => t.completedAt === null)
+      .sort((a, b) => a.order - b.order);
     
     const newTodo: Todo = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       name,
       notes,
       completedAt: null,
-      order: maxOrder + 1,
+      order: 0, // Will be set based on insertIndex
       focusedAt: null,
       timeSpent: null,
     };
 
-    await persistTodos([...todos, newTodo]);
-  }, [todos, persistTodos]);
+    if (insertIndex !== undefined && insertIndex >= 0 && insertIndex <= activeTodos.length) {
+      // Insert at specific index
+      const updatedActiveTodos = [...activeTodos];
+      updatedActiveTodos.splice(insertIndex, 0, newTodo);
+      
+      // Reorder all active todos
+      const reorderedActive = updatedActiveTodos.map((t, idx) => ({ ...t, order: idx }));
+      
+      // Save all reordered todos
+      await db.withTransactionAsync(async () => {
+        for (const todo of reorderedActive) {
+          await saveTodo(db, todo);
+        }
+      });
+      
+      // Update state
+      const completedTodos = todos.filter(t => t.completedAt !== null);
+      setTodos([...reorderedActive, ...completedTodos]);
+    } else {
+      // Append to end (original behavior)
+      const maxOrder = activeTodos.length > 0 
+        ? Math.max(...activeTodos.map(t => t.order))
+        : -1;
+      
+      newTodo.order = maxOrder + 1;
+      await saveTodo(db, newTodo);
+      setTodos([...todos, newTodo]);
+    }
+  }, [todos, db]);
 
   const updateTodo = useCallback(async (id: string, updates: Partial<Todo>) => {
+    await updateTodoInDb(db, id, updates);
     const updated = todos.map(t => 
       t.id === id ? { ...t, ...updates } : t
     );
-    await persistTodos(updated);
-  }, [todos, persistTodos]);
+    setTodos(updated);
+  }, [todos, db]);
 
   const deleteTodo = useCallback(async (id: string) => {
     // Stop the Live Activity if the task being deleted has one
@@ -100,9 +129,10 @@ export function TodosProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    await deleteTodoFromDb(db, id);
     const filtered = todos.filter(t => t.id !== id);
-    await persistTodos(filtered);
-  }, [todos, persistTodos]);
+    setTodos(filtered);
+  }, [todos, db]);
 
   const completeTodo = useCallback(async (id: string) => {
     const now = new Date();
@@ -133,26 +163,37 @@ export function TodosProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const updated = todos.map(t => {
-      if (t.id === id) {
-        let timeSpent = null;
-        // If task was focused, calculate time spent
-        if (t.focusedAt) {
-          const focusedTime = new Date(t.focusedAt).getTime();
-          const completedTime = now.getTime();
-          timeSpent = Math.floor((completedTime - focusedTime) / 1000); // Time in seconds
-        }
-        return {
-          ...t,
-          completedAt: now.toISOString(),
-          timeSpent,
-          focusedAt: null, // Clear focus when completing
-        };
-      }
-      return t;
+    // Load current todos from storage to avoid stale state issues
+    // This is critical when the app is backgrounded and state might be stale
+    const currentTodos = await loadTodos(db);
+    
+    const todo = currentTodos.find(t => t.id === id);
+    if (!todo) return;
+
+    let timeSpent = null;
+    // If task was focused, calculate time spent
+    if (todo.focusedAt) {
+      const focusedTime = new Date(todo.focusedAt).getTime();
+      const completedTime = now.getTime();
+      timeSpent = Math.floor((completedTime - focusedTime) / 1000); // Time in seconds
+    }
+
+    await updateTodoInDb(db, id, {
+      completedAt: now.toISOString(),
+      timeSpent,
+      focusedAt: null, // Clear focus when completing
     });
-    await persistTodos(updated);
-  }, [todos, persistTodos]);
+
+    const updated = todos.map(t => 
+      t.id === id ? {
+        ...t,
+        completedAt: now.toISOString(),
+        timeSpent,
+        focusedAt: null,
+      } : t
+    );
+    setTodos(updated);
+  }, [todos, db]);
 
   const restoreTodo = useCallback(async (id: string) => {
     const activeTodos = todos.filter(t => t.completedAt === null);
@@ -160,6 +201,13 @@ export function TodosProvider({ children }: { children: ReactNode }) {
       ? Math.max(...activeTodos.map(t => t.order))
       : -1;
     
+    await updateTodoInDb(db, id, {
+      completedAt: null,
+      order: maxOrder + 1,
+      focusedAt: null,
+      timeSpent: null,
+    });
+
     const updated = todos.map(t => 
       t.id === id ? { 
         ...t, 
@@ -169,8 +217,8 @@ export function TodosProvider({ children }: { children: ReactNode }) {
         timeSpent: null,
       } : t
     );
-    await persistTodos(updated);
-  }, [todos, persistTodos]);
+    setTodos(updated);
+  }, [todos, db]);
 
   // Set up Voltra interaction listener for Live Activity buttons
   // This must be after completeTodo is defined
@@ -212,13 +260,15 @@ export function TodosProvider({ children }: { children: ReactNode }) {
     const focusedAt = new Date().toISOString();
     const startAtMs = Date.now();
 
+    await updateTodoInDb(db, id, { focusedAt });
+
     const updated = todos.map(t => {
       if (t.id === id && !t.completedAt) {
         return { ...t, focusedAt };
       }
       return t;
     });
-    await persistTodos(updated);
+    setTodos(updated);
 
     // Start live activity on iOS
     if (Platform.OS === 'ios') {
@@ -245,13 +295,15 @@ export function TodosProvider({ children }: { children: ReactNode }) {
         console.error('Failed to start live activity:', error);
       }
     }
-  }, [todos, persistTodos, completeTodo, getActivityName]);
+  }, [todos, completeTodo, getActivityName]);
 
   const unfocusTodo = useCallback(async (id: string) => {
+    await updateTodoInDb(db, id, { focusedAt: null });
+
     const updated = todos.map(t => 
       t.id === id ? { ...t, focusedAt: null } : t
     );
-    await persistTodos(updated);
+    setTodos(updated);
 
     // Stop the Live Activity when focus is cancelled
     if (Platform.OS === 'ios') {
@@ -278,7 +330,7 @@ export function TodosProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-  }, [todos, persistTodos]);
+  }, [todos]);
 
   const reorderTodos = useCallback(async (fromIndex: number, toIndex: number) => {
     const activeTodos = todos
@@ -290,10 +342,17 @@ export function TodosProvider({ children }: { children: ReactNode }) {
 
     // Update order for all active todos
     const reorderedActive = activeTodos.map((t, idx) => ({ ...t, order: idx }));
-    const completedTodos = todos.filter(t => t.completedAt !== null);
     
-    await persistTodos([...reorderedActive, ...completedTodos]);
-  }, [todos, persistTodos]);
+    // Save all reordered todos in a transaction
+    await db.withTransactionAsync(async () => {
+      for (const todo of reorderedActive) {
+        await saveTodo(db, todo);
+      }
+    });
+
+    const completedTodos = todos.filter(t => t.completedAt !== null);
+    setTodos([...reorderedActive, ...completedTodos]);
+  }, [todos, db]);
 
   return (
     <TodosContext.Provider

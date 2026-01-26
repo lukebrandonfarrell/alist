@@ -1,5 +1,6 @@
-import { loadHabits, saveHabits } from '@/lib/habits-storage';
+import { loadHabits, saveHabit, deleteHabit as deleteHabitFromDb, updateHabit as updateHabitInDb } from '@/lib/habits-storage';
 import { Habit } from '@/types/habit';
+import { useSQLiteContext } from 'expo-sqlite';
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 interface HabitsContextType {
@@ -15,21 +16,22 @@ interface HabitsContextType {
 const HabitsContext = createContext<HabitsContextType | undefined>(undefined);
 
 export function HabitsProvider({ children }: { children: ReactNode }) {
+  const db = useSQLiteContext();
   const [habits, setHabits] = useState<Habit[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const loaded = await loadHabits();
-      setHabits(loaded);
-      setLoading(false);
+      try {
+        const loaded = await loadHabits(db);
+        setHabits(loaded);
+      } catch (error) {
+        console.error('Error loading habits:', error);
+      } finally {
+        setLoading(false);
+      }
     })();
-  }, []);
-
-  const persistHabits = useCallback(async (newHabits: Habit[]) => {
-    setHabits(newHabits);
-    await saveHabits(newHabits);
-  }, []);
+  }, [db]);
 
   const createHabit = useCallback(async (name: string) => {
     const activeHabits = habits.filter(h => h.order !== undefined);
@@ -45,20 +47,23 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
       order: maxOrder + 1,
     };
 
-    await persistHabits([...habits, newHabit]);
-  }, [habits, persistHabits]);
+    await saveHabit(db, newHabit);
+    setHabits([...habits, newHabit]);
+  }, [habits, db]);
 
   const updateHabit = useCallback(async (id: string, updates: Partial<Habit>) => {
+    await updateHabitInDb(db, id, updates);
     const updated = habits.map(h => 
       h.id === id ? { ...h, ...updates } : h
     );
-    await persistHabits(updated);
-  }, [habits, persistHabits]);
+    setHabits(updated);
+  }, [habits, db]);
 
   const deleteHabit = useCallback(async (id: string) => {
+    await deleteHabitFromDb(db, id);
     const filtered = habits.filter(h => h.id !== id);
-    await persistHabits(filtered);
-  }, [habits, persistHabits]);
+    setHabits(filtered);
+  }, [habits, db]);
 
   const toggleHabitEntry = useCallback(async (id: string, date: Date) => {
     const dateKey = new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString();
@@ -89,8 +94,16 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
 
     // Update order for all habits
     const reordered = sortedHabits.map((h, idx) => ({ ...h, order: idx }));
-    await persistHabits(reordered);
-  }, [habits, persistHabits]);
+    
+    // Save all reordered habits in a transaction
+    await db.withTransactionAsync(async () => {
+      for (const habit of reordered) {
+        await saveHabit(db, habit);
+      }
+    });
+
+    setHabits(reordered);
+  }, [habits, db]);
 
   return (
     <HabitsContext.Provider

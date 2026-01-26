@@ -16,6 +16,7 @@ export default function TasksScreen() {
   const { todos, loading, createTodo, updateTodo, deleteTodo, completeTodo, reorderTodos, focusTodo, unfocusTodo } = useTodos();
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const [formVisible, setFormVisible] = useState(false);
+  const [insertIndex, setInsertIndex] = useState<number | undefined>(undefined);
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
@@ -27,7 +28,8 @@ export default function TasksScreen() {
   }, [todos]);
 
   const handleCreate = async (name: string, notes?: string) => {
-    await createTodo(name, notes);
+    await createTodo(name, notes, insertIndex);
+    setInsertIndex(undefined);
   };
 
   const handleEdit = async (name: string, notes?: string) => {
@@ -106,21 +108,39 @@ export default function TasksScreen() {
               onDragEnd={handleDragEnd}
               keyExtractor={(item) => item.id}
               ListHeaderComponent={renderListHeader}
-              renderItem={({ item, drag, isActive }) => (
-                <TodoItem
-                  todo={item}
-                  onEdit={() => {
-                    setEditingTodo(item);
-                    setFormVisible(true);
-                  }}
-                  onDelete={() => handleDelete(item.id)}
-                  onToggleComplete={() => handleComplete(item.id)}
-                  onFocus={() => focusTodo(item.id)}
-                  onUnfocus={() => unfocusTodo(item.id)}
-                  onDrag={drag}
-                  isActive={isActive}
-                />
-              )}
+              renderItem={({ item, drag, isActive }) => {
+                const index = activeTodos.findIndex(t => t.id === item.id);
+                return (
+                  <View>
+                    <TodoItem
+                      todo={item}
+                      onEdit={() => {
+                        setEditingTodo(item);
+                        setFormVisible(true);
+                      }}
+                      onDelete={() => handleDelete(item.id)}
+                      onToggleComplete={() => handleComplete(item.id)}
+                      onFocus={() => focusTodo(item.id)}
+                      onUnfocus={() => unfocusTodo(item.id)}
+                      onDrag={drag}
+                      isActive={isActive}
+                    />
+                    <TouchableOpacity
+                      style={[styles.addButtonSeparator, { borderColor: colors.icon }]}
+                      onPress={() => {
+                        setInsertIndex(index + 1);
+                        setEditingTodo(null);
+                        setFormVisible(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.addButtonBox, { borderColor: colors.icon }]}>
+                        <IconSymbol name="plus" size={16} color={colors.icon} />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                );
+              }}
               contentContainerStyle={styles.listContent}
             />
           </NestableScrollContainer>
@@ -132,6 +152,7 @@ export default function TasksScreen() {
           onClose={() => {
             setFormVisible(false);
             setEditingTodo(null);
+            setInsertIndex(undefined);
           }}
           onSubmit={editingTodo ? handleEdit : handleCreate}
         />
@@ -175,5 +196,18 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     paddingBottom: 120,
+  },
+  addButtonSeparator: {
+    width: '100%',
+    paddingVertical: 8,
+  },
+  addButtonBox: {
+    width: '100%',
+    height: 40,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
