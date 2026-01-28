@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const DATABASE_NAME = 'dodo.db';
 
 /**
@@ -56,6 +56,26 @@ export async function initDatabase(db: SQLiteDatabase): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_todos_order ON todos("order");
       CREATE INDEX IF NOT EXISTS idx_todos_completed_at ON todos(completed_at);
       CREATE INDEX IF NOT EXISTS idx_habits_order ON habits("order");
+    `);
+  }
+
+  // Migration from version 1 to 2: Add task_templates table
+  if (currentVersion < 2) {
+    // Create task_templates table
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS task_templates (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        notes TEXT,
+        "order" INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
+
+    // Create index for better query performance
+    await db.execAsync(`
+      CREATE INDEX IF NOT EXISTS idx_task_templates_order ON task_templates("order");
     `);
   }
 

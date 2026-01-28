@@ -1,12 +1,16 @@
 import { EmptyState } from '@/components/todo/empty-state';
 import { TodoForm } from '@/components/todo/todo-form';
 import { TodoItem } from '@/components/todo/todo-item';
+import { TemplateForm } from '@/components/template/template-form';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
+import { useTemplates } from '@/contexts/templates-context';
 import { useTodos } from '@/contexts/todos-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { TaskTemplate } from '@/types/task-template';
 import { Todo } from '@/types/todo';
-import React, { useMemo, useState } from 'react';
+import { useActionSheet } from '@expo/react-native-action-sheet';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { NestableDraggableFlatList, NestableScrollContainer } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -14,8 +18,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TasksScreen() {
   const { todos, loading, createTodo, updateTodo, deleteTodo, completeTodo, reorderTodos, focusTodo, unfocusTodo } = useTodos();
+  const { templates, createTemplate } = useTemplates();
+  const { showActionSheetWithOptions } = useActionSheet();
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(null);
   const [formVisible, setFormVisible] = useState(false);
+  const [templateFormVisible, setTemplateFormVisible] = useState(false);
   const [insertIndex, setInsertIndex] = useState<number | undefined>(undefined);
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
@@ -65,6 +73,64 @@ export default function TasksScreen() {
     }
   };
 
+  const showActionSheet = useCallback((index?: number) => {
+    const options: string[] = ['Create Blank Action'];
+    
+    if (templates.length > 0) {
+      options.push('Create Action from Template');
+    }
+    
+    options.push('Create Action Template', 'Cancel');
+    
+    const cancelButtonIndex = options.length - 1;
+    const destructiveButtonIndex = undefined;
+
+    showActionSheetWithOptions(
+      {
+        options,
+        cancelButtonIndex,
+        destructiveButtonIndex,
+      },
+      (selectedIndex?: number) => {
+        if (selectedIndex === undefined || selectedIndex === cancelButtonIndex) {
+          return;
+        }
+
+        if (selectedIndex === 0) {
+          // Create Blank Action
+          setInsertIndex(index);
+          setEditingTodo(null);
+          setFormVisible(true);
+        } else if (selectedIndex === 1 && templates.length > 0) {
+          // Create Action from Template
+          const templateOptions = [
+            ...templates.map(t => t.name),
+            'Cancel',
+          ];
+          const templateCancelIndex = templates.length;
+
+          showActionSheetWithOptions(
+            {
+              options: templateOptions,
+              cancelButtonIndex: templateCancelIndex,
+              title: 'Select a Template',
+            },
+            (templateIndex?: number) => {
+              if (templateIndex !== undefined && templateIndex < templates.length) {
+                const selectedTemplate = templates[templateIndex];
+                createTodo(selectedTemplate.name, selectedTemplate.notes, index);
+              }
+            }
+          );
+        } else if (selectedIndex === (templates.length > 0 ? 2 : 1)) {
+          // Create Action Template
+          setEditingTemplate(null);
+          setTemplateFormVisible(true);
+        }
+      }
+    );
+  }, [templates, showActionSheetWithOptions, createTodo]);
+
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -75,15 +141,16 @@ export default function TasksScreen() {
     );
   }
 
+  const handleCreateTemplate = async (name: string, notes?: string) => {
+    await createTemplate(name, notes);
+  };
+
   const renderListHeader = () => (
     <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
       <Text style={[styles.headerTitle, { color: colors.text }]}>Actions</Text>
       <TouchableOpacity
         style={[styles.addButton, { backgroundColor: colors.tint }]}
-        onPress={() => {
-          setEditingTodo(null);
-          setFormVisible(true);
-        }}
+        onPress={() => showActionSheet()}
       >
         <IconSymbol name="plus" size={20} color="#fff" />
       </TouchableOpacity>
@@ -127,11 +194,7 @@ export default function TasksScreen() {
                     />
                     <TouchableOpacity
                       style={[styles.addButtonSeparator, { borderColor: colors.icon }]}
-                      onPress={() => {
-                        setInsertIndex(index + 1);
-                        setEditingTodo(null);
-                        setFormVisible(true);
-                      }}
+                      onPress={() => showActionSheet(index + 1)}
                       activeOpacity={0.7}
                     >
                       <View style={[styles.addButtonBox, { borderColor: colors.icon }]}>
@@ -155,6 +218,16 @@ export default function TasksScreen() {
             setInsertIndex(undefined);
           }}
           onSubmit={editingTodo ? handleEdit : handleCreate}
+        />
+
+        <TemplateForm
+          visible={templateFormVisible}
+          template={editingTemplate}
+          onClose={() => {
+            setTemplateFormVisible(false);
+            setEditingTemplate(null);
+          }}
+          onSubmit={handleCreateTemplate}
         />
       </View>
     </GestureHandlerRootView>

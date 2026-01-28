@@ -2,8 +2,10 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
+import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 
 import { HabitsProvider } from '@/contexts/habits-context';
+import { TemplatesProvider } from '@/contexts/templates-context';
 import { TodosProvider } from '@/contexts/todos-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SQLiteProvider } from 'expo-sqlite';
@@ -21,16 +23,20 @@ export default function RootLayout() {
       databaseName={getDatabaseName()}
       onInit={initDatabase}
     >
-      <TodosProvider>
-        <HabitsProvider>
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            </Stack>
-            <StatusBar style="auto" />
-          </ThemeProvider>
-        </HabitsProvider>
-      </TodosProvider>
+      <ActionSheetProvider>
+        <TodosProvider>
+          <TemplatesProvider>
+            <HabitsProvider>
+              <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+                <Stack>
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                </Stack>
+                <StatusBar style="auto" />
+              </ThemeProvider>
+            </HabitsProvider>
+          </TemplatesProvider>
+        </TodosProvider>
+      </ActionSheetProvider>
     </SQLiteProvider>
   );
 }
