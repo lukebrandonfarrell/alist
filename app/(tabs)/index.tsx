@@ -1,7 +1,7 @@
+import { TemplateForm } from '@/components/template/template-form';
 import { EmptyState } from '@/components/todo/empty-state';
 import { TodoForm } from '@/components/todo/todo-form';
 import { TodoItem } from '@/components/todo/todo-item';
-import { TemplateForm } from '@/components/template/template-form';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useTemplates } from '@/contexts/templates-context';
@@ -14,6 +14,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { NestableDraggableFlatList, NestableScrollContainer } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { ReactNativeGrabScreen } from 'react-native-grab';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TasksScreen() {
@@ -151,6 +152,7 @@ export default function TasksScreen() {
       <TouchableOpacity
         style={[styles.addButton, { backgroundColor: colors.tint }]}
         onPress={() => showActionSheet()}
+        accessibilityLabel='Plus'
       >
         <IconSymbol name="plus" size={20} color="#fff" />
       </TouchableOpacity>
@@ -158,8 +160,9 @@ export default function TasksScreen() {
   );
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <ReactNativeGrabScreen>
+      <GestureHandlerRootView style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
         {activeTodos.length === 0 ? (
           <View style={{ flex: 1, paddingHorizontal: 16 }}>
             {renderListHeader()}
@@ -229,8 +232,9 @@ export default function TasksScreen() {
           }}
           onSubmit={handleCreateTemplate}
         />
-      </View>
-    </GestureHandlerRootView>
+        </View>
+      </GestureHandlerRootView>
+    </ReactNativeGrabScreen>
   );
 }
 

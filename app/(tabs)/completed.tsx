@@ -8,6 +8,7 @@ import { Todo } from '@/types/todo';
 import React, { useMemo } from 'react';
 import { ActivityIndicator, SectionList, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ReactNativeGrabScreen } from 'react-native-grab';
 
 export default function CompletedScreen() {
   const { todos, loading, deleteTodo, restoreTodo, unfocusTodo } = useTodos();
@@ -38,8 +39,9 @@ export default function CompletedScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {sections.length === 0 ? (
+    <ReactNativeGrabScreen>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        {sections.length === 0 ? (
         <View style={{ paddingTop: insets.top }}>
           <EmptyState
             title="No completed actions"
@@ -91,7 +93,8 @@ export default function CompletedScreen() {
           contentContainerStyle={styles.listContent}
         />
       )}
-    </View>
+      </View>
+    </ReactNativeGrabScreen>
   );
 }
 

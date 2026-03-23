@@ -9,6 +9,7 @@ import { Habit } from '@/types/habit';
 import React, { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ReactNativeGrabScreen } from 'react-native-grab';
 
 export default function HabitsScreen() {
   const { habits, loading, createHabit, updateHabit, deleteHabit, toggleHabitEntry } = useHabits();
@@ -126,8 +127,9 @@ export default function HabitsScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+    <ReactNativeGrabScreen>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Habits</Text>
         <TouchableOpacity
           style={[styles.addButton, { backgroundColor: colors.tint }]}
@@ -201,7 +203,8 @@ export default function HabitsScreen() {
         }}
         onSubmit={editingHabit ? handleEdit : handleCreate}
       />
-    </View>
+      </View>
+    </ReactNativeGrabScreen>
   );
 }
 

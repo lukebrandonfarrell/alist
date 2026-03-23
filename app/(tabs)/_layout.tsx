@@ -19,6 +19,10 @@ export default function TabLayout() {
         <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
         <Label>Habits</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="collections">
+        <Icon sf={{ default: 'folder', selected: 'folder.fill' }} />
+        <Label>Collections</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="completed">
         <Icon sf={{ default: 'checkmark.circle', selected: 'checkmark.circle.fill' }} />
         <Label>Completed</Label>

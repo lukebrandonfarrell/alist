@@ -120,6 +120,7 @@ export function TodoForm({ visible, todo, onClose, onSubmit }: TodoFormProps) {
             style={[styles.input, { color: colors.text, borderColor: colors.icon }]}
             placeholder="Task name"
             placeholderTextColor={colors.icon}
+            accessibilityLabel='Task name'
             value={name}
             onChangeText={setName}
             autoFocus

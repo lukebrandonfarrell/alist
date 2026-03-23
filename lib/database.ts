@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 const DATABASE_NAME = 'dodo.db';
 
 /**
@@ -76,6 +76,39 @@ export async function initDatabase(db: SQLiteDatabase): Promise<void> {
     // Create index for better query performance
     await db.execAsync(`
       CREATE INDEX IF NOT EXISTS idx_task_templates_order ON task_templates("order");
+    `);
+  }
+
+  // Migration from version 2 to 3: Add collections and collection_items tables
+  if (currentVersion < 3) {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS collections (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        completed_at TEXT,
+        "order" INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS collection_items (
+        id TEXT PRIMARY KEY NOT NULL,
+        collection_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        completed_at TEXT,
+        "order" INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE
+      );
+    `);
+    await db.execAsync(`
+      CREATE INDEX IF NOT EXISTS idx_collections_order ON collections("order");
+      CREATE INDEX IF NOT EXISTS idx_collections_completed_at ON collections(completed_at);
+      CREATE INDEX IF NOT EXISTS idx_collection_items_collection_id ON collection_items(collection_id);
+      CREATE INDEX IF NOT EXISTS idx_collection_items_order ON collection_items("order");
     `);
   }
 
